@@ -14,16 +14,21 @@ const logger = winston.createLogger({
   ]
 });
 
+// Функция для запуска микросервиса М2
 async function startM2() {
   try {
     const connection = await amqp.connect(config.rabbitMQ.connectionUrl);
     const channel = await connection.createChannel();
 
     const taskQueue = config.rabbitMQ.taskQueueName;
+    const resultQueue = config.rabbitMQ.resultQueueName;
+
+    // Объявляем очередь задач
     await channel.assertQueue(taskQueue, { durable: true });
 
     console.log('M2: Ожидание заданий...');
 
+    // Обработчик сообщений из очереди задач
     channel.consume(taskQueue, async (message) => {
       const task = message.content.toString();
       logger.info(`M2: Получено задание: ${task}`);
@@ -33,10 +38,11 @@ async function startM2() {
 
       logger.info(`M2: Задание выполнено: ${result}`);
 
-      const resultQueue = config.rabbitMQ.resultQueueName;
+      // Отправляем результат в очередь результатов
       await channel.assertQueue(resultQueue, { durable: true });
       channel.sendToQueue(resultQueue, Buffer.from(result), { persistent: true });
 
+      // Подтверждаем выполнение задания
       channel.ack(message);
     });
   } catch (error) {
